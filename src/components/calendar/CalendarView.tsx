@@ -104,12 +104,18 @@ const CalendarView = () => {
     time: string;
   }) => {
     try {
-      await createAppointment({
-        client_id: appointmentData.clientId,
-        service_ids: appointmentData.serviceIds,
-        date: appointmentData.date,
-        time: appointmentData.time,
-      });
+      // Create an appointment for each service
+      await Promise.all(
+        appointmentData.serviceIds.map((serviceId) =>
+          createAppointment({
+            client_id: appointmentData.clientId,
+            service_id: serviceId,
+            date: appointmentData.date,
+            time: appointmentData.time,
+            is_paid: false,
+          }),
+        ),
+      );
 
       await fetchAppointments();
       setShowAppointmentForm(false);
