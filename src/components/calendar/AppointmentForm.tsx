@@ -1,15 +1,13 @@
 import React from "react";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, ChevronDown, ChevronUp, X } from "lucide-react";
+import { Search, ChevronDown, ChevronUp, X, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { Database } from "@/types/database.types";
-import { cn } from "@/lib/utils";
 
 type Client = Database["public"]["Tables"]["clients"]["Row"];
 type Service = Database["public"]["Tables"]["services"]["Row"];
@@ -17,7 +15,7 @@ type Service = Database["public"]["Tables"]["services"]["Row"];
 type AppointmentFormProps = {
   onSubmit: (appointment: {
     clientId: string;
-    serviceId: string;
+    serviceIds: string[];
     date: string;
     time: string;
   }) => void;
@@ -52,10 +50,9 @@ const AppointmentForm = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedClient && selectedServices.length > 0) {
-      // For now, we'll just use the first selected service
       onSubmit({
         clientId: selectedClient.id,
-        serviceId: selectedServices[0].id,
+        serviceIds: selectedServices.map((service) => service.id),
         date: format(date, "yyyy-MM-dd"),
         time,
       });
@@ -70,72 +67,49 @@ const AppointmentForm = ({
     );
   };
 
-  return (
-    <Card className="w-full p-6 bg-white">
-      <h3 className="text-lg font-semibold mb-6">Nowa wizyta</h3>
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Date and Time Section */}
-        <div className="space-y-4">
-          <div>
-            <Label>Data</Label>
-            <Calendar
-              mode="single"
-              selected={date}
-              onSelect={(date) => date && setDate(date)}
-              className="rounded-md border mt-2"
-              locale={pl}
-            />
-          </div>
-          <div>
-            <Label>Godzina</Label>
-            <Input
-              type="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              step="60"
-              className="mt-2"
-            />
-          </div>
-        </div>
+  const totalDuration = selectedServices.reduce(
+    (total, service) => total + service.duration,
+    0,
+  );
 
-        {/* Services Section */}
-        <div className="space-y-2">
-          <Label>Wybrane usługi</Label>
-          <div className="grid grid-cols-2 gap-2 mb-2">
-            {selectedServices.map((service) => (
-              <div
-                key={service.id}
-                className="flex items-center justify-between p-2 rounded-md border"
-                style={{ backgroundColor: service.color + "33" }}
-              >
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: service.color }}
-                  />
-                  <span>{service.name}</span>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => toggleService(service)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
+  return (
+    <div className="w-full">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-8">
+          {/* Left Column - Date & Time */}
+          <div className="space-y-4">
+            <div>
+              <Label className="text-sm font-medium">Data</Label>
+              <Calendar
+                mode="single"
+                selected={date}
+                onSelect={(date) => date && setDate(date)}
+                className="rounded-md border mt-2"
+                locale={pl}
+              />
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Godzina</Label>
+              <Input
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                step="60"
+                className="mt-2"
+              />
+            </div>
           </div>
-          <ScrollArea className="h-48 border rounded-md p-2">
-            <div className="space-y-2">
-              {services
-                .filter((s) => !selectedServices.some((ss) => ss.id === s.id))
-                .map((service) => (
-                  <button
+
+          {/* Right Column - Services & Client */}
+          <div className="space-y-6">
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Wybrane usługi</Label>
+              <div className="space-y-2">
+                {selectedServices.map((service) => (
+                  <div
                     key={service.id}
-                    type="button"
-                    className="w-full flex items-center justify-between p-2 rounded-md hover:bg-gray-100"
-                    onClick={() => toggleService(service)}
+                    className="flex items-center justify-between p-2 rounded-md border"
+                    style={{ backgroundColor: service.color + "33" }}
                   >
                     <div className="flex items-center gap-2">
                       <div
@@ -143,91 +117,132 @@ const AppointmentForm = ({
                         style={{ backgroundColor: service.color }}
                       />
                       <span>{service.name}</span>
+                      <span className="text-sm text-gray-500">
+                        ({service.duration} min)
+                      </span>
                     </div>
-                    <span className="text-sm text-gray-500">
-                      {service.duration} min
-                    </span>
-                  </button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggleService(service)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
                 ))}
-            </div>
-          </ScrollArea>
-        </div>
-
-        {/* Client Section */}
-        <div className="space-y-2">
-          <Label>Klient</Label>
-          {selectedClient ? (
-            <div className="flex items-center justify-between p-2 rounded-md border mb-2">
-              <span>
-                {selectedClient.first_name} {selectedClient.last_name}
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedClient(null)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
-                <Input
-                  placeholder="Szukaj klienta..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
-                />
+                {selectedServices.length > 0 && (
+                  <div className="flex items-center gap-2 text-sm text-gray-600 p-2 bg-gray-50 rounded-md">
+                    <Clock className="h-4 w-4" />
+                    Łączny czas: {totalDuration} min
+                  </div>
+                )}
               </div>
-              {(searchTerm || showAllClients) && (
-                <ScrollArea className="h-48 border rounded-md p-2">
-                  <div className="space-y-2">
-                    {filteredClients.map((client) => (
+              <ScrollArea className="h-[200px] border rounded-md p-1.5">
+                <div className="space-y-2">
+                  {services
+                    .filter(
+                      (s) => !selectedServices.some((ss) => ss.id === s.id),
+                    )
+                    .map((service) => (
                       <button
-                        key={client.id}
+                        key={service.id}
                         type="button"
-                        className="w-full text-left p-2 rounded-md hover:bg-gray-100"
-                        onClick={() => {
-                          setSelectedClient(client);
-                          setSearchTerm("");
-                        }}
+                        className="w-full flex items-center justify-between p-2 rounded-md hover:bg-gray-100"
+                        onClick={() => toggleService(service)}
                       >
-                        <div className="font-medium">
-                          {client.first_name} {client.last_name}
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: service.color }}
+                          />
+                          <span>{service.name}</span>
                         </div>
-                        <div className="text-sm text-gray-500">
-                          {client.phone}
-                        </div>
+                        <span className="text-sm text-gray-500">
+                          {service.duration} min
+                        </span>
                       </button>
                     ))}
-                  </div>
-                </ScrollArea>
-              )}
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={() => setShowAllClients(!showAllClients)}
-              >
-                {showAllClients ? (
-                  <>
-                    <ChevronUp className="h-4 w-4 mr-2" />
-                    Ukryj listę klientów
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown className="h-4 w-4 mr-2" />
-                    Pokaż wszystkich klientów
-                  </>
-                )}
-              </Button>
+                </div>
+              </ScrollArea>
             </div>
-          )}
+
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Klient</Label>
+              {selectedClient ? (
+                <div className="flex items-center justify-between p-2 rounded-md border">
+                  <span>
+                    {selectedClient.first_name} {selectedClient.last_name}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedClient(null)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
+                    <Input
+                      placeholder="Szukaj klienta..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-8"
+                    />
+                  </div>
+                  {(searchTerm || showAllClients) && (
+                    <ScrollArea className="h-[200px] border rounded-md p-1.5">
+                      <div className="space-y-2">
+                        {filteredClients.map((client) => (
+                          <button
+                            key={client.id}
+                            type="button"
+                            className="w-full text-left p-2 rounded-md hover:bg-gray-100"
+                            onClick={() => {
+                              setSelectedClient(client);
+                              setSearchTerm("");
+                            }}
+                          >
+                            <div className="font-medium">
+                              {client.first_name} {client.last_name}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {client.phone}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => setShowAllClients(!showAllClients)}
+                  >
+                    {showAllClients ? (
+                      <>
+                        <ChevronUp className="h-4 w-4 mr-2" />
+                        Ukryj listę klientów
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-4 w-4 mr-2" />
+                        Pokaż wszystkich klientów
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        <div className="flex justify-end space-x-2 pt-4">
+        <div className="flex justify-end space-x-2 pt-4 border-t">
           <Button type="button" variant="outline" onClick={onCancel}>
             Anuluj
           </Button>
@@ -239,7 +254,7 @@ const AppointmentForm = ({
           </Button>
         </div>
       </form>
-    </Card>
+    </div>
   );
 };
 
