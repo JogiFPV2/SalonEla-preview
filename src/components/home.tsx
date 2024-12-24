@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ServiceManagement from "./services/ServiceManagement";
 import ClientManagement from "./clients/ClientManagement";
 import CalendarView from "./calendar/CalendarView";
+import HistoryView from "./history/HistoryView";
 
 interface HomeProps {
   activeTab?: string;
@@ -21,10 +22,11 @@ const Home = ({
           onValueChange={onTabChange}
           className="w-full"
         >
-          <TabsList className="grid w-full grid-cols-3 mb-4">
+          <TabsList className="grid w-full grid-cols-4 mb-4">
             <TabsTrigger value="calendar">Kalendarz</TabsTrigger>
             <TabsTrigger value="services">Usługi</TabsTrigger>
             <TabsTrigger value="clients">Klienci</TabsTrigger>
+            <TabsTrigger value="history">Historia</TabsTrigger>
           </TabsList>
 
           <TabsContent value="services" className="mt-0">
@@ -37,6 +39,10 @@ const Home = ({
 
           <TabsContent value="calendar" className="mt-0">
             <CalendarView />
+          </TabsContent>
+
+          <TabsContent value="history" className="mt-0">
+            <HistoryView />
           </TabsContent>
         </Tabs>
       </div>

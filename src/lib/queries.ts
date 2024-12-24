@@ -109,14 +109,29 @@ export const getAppointments = async () => {
   return data;
 };
 
-export const createAppointment = async (
-  appointment: Database["public"]["Tables"]["appointments"]["Insert"],
-) => {
+export const createAppointment = async ({
+  client_id,
+  service_ids,
+  date,
+  time,
+}: {
+  client_id: string;
+  service_ids: string[];
+  date: string;
+  time: string;
+}) => {
+  // Create an appointment for each service
   const { data, error } = await supabase
     .from("appointments")
-    .insert(appointment)
-    .select()
-    .single();
+    .insert(
+      service_ids.map((service_id) => ({
+        client_id,
+        service_id,
+        date,
+        time,
+      })),
+    )
+    .select();
 
   if (error) throw error;
   return data;
