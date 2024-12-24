@@ -8,6 +8,8 @@ import AppointmentList from "./AppointmentList";
 import AppointmentForm from "./AppointmentForm";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/use-toast";
 import {
   getAppointments,
   createAppointment,
@@ -47,6 +49,7 @@ const CalendarView = () => {
   const [clients, setClients] = React.useState<Client[]>([]);
   const [services, setServices] = React.useState<Service[]>([]);
   const [showAppointmentForm, setShowAppointmentForm] = React.useState(false);
+  const { toast } = useToast();
 
   React.useEffect(() => {
     const timer = setInterval(() => {
@@ -84,7 +87,7 @@ const CalendarView = () => {
 
   const formattedAppointments = appointments.map((apt) => ({
     id: apt.id,
-    clientName: `${apt.clients.first_name} ${apt.clients.last_name}`,
+    clientName: `${apt.clients?.first_name} ${apt.clients?.last_name}`,
     serviceName: apt.services.name,
     serviceColor: apt.services.color,
     duration: apt.services.duration.toString(),
@@ -96,22 +99,31 @@ const CalendarView = () => {
 
   const handleAppointmentSubmit = async (appointmentData: {
     clientId: string;
-    serviceId: string;
+    serviceIds: string[];
     date: string;
     time: string;
   }) => {
     try {
       await createAppointment({
         client_id: appointmentData.clientId,
-        service_id: appointmentData.serviceId,
+        service_ids: appointmentData.serviceIds,
         date: appointmentData.date,
         time: appointmentData.time,
       });
 
       await fetchAppointments();
       setShowAppointmentForm(false);
+      toast({
+        title: "Wizyta dodana",
+        description: "Pomyślnie dodano nową wizytę",
+      });
     } catch (error) {
       console.error("Error creating appointment:", error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się dodać wizyty",
+        variant: "destructive",
+      });
     }
   };
 
@@ -142,36 +154,36 @@ const CalendarView = () => {
         />
       </div>
 
+      <Dialog open={showAppointmentForm} onOpenChange={setShowAppointmentForm}>
+        <DialogContent className="max-w-3xl">
+          <AppointmentForm
+            onSubmit={handleAppointmentSubmit}
+            clients={clients}
+            services={services}
+            selectedDate={selectedDate}
+            onCancel={() => setShowAppointmentForm(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
       {/* Split View Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Calendar Picker */}
         <Card className="p-4 bg-white">
-          {showAppointmentForm ? (
-            <AppointmentForm
-              onSubmit={handleAppointmentSubmit}
-              clients={clients}
-              services={services}
-              selectedDate={selectedDate}
-              onCancel={() => setShowAppointmentForm(false)}
-            />
-          ) : (
-            <>
-              <div className="text-center mb-4 text-lg font-medium text-gray-600">
-                {format(currentDate, "EEEE, d MMMM yyyy", { locale: pl })}
-              </div>
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={(date) => date && setSelectedDate(date)}
-                className="rounded-md"
-                locale={pl}
-              />
-            </>
-          )}
+          <div className="text-center mb-4 text-lg font-medium text-gray-600">
+            {format(currentDate, "EEEE, d MMMM yyyy", { locale: pl })}
+          </div>
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            onSelect={(date) => date && setSelectedDate(date)}
+            className="rounded-md"
+            locale={pl}
+          />
         </Card>
 
         {/* Appointment List */}
-        <div className="md:col-span-2 h-full">
+        <div className="lg:col-span-2">
           <AppointmentList
             appointments={formattedAppointments}
             selectedDate={selectedDate}
