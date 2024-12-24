@@ -15,6 +15,7 @@ import {
   createAppointment,
   getClients,
   getServices,
+  deleteAppointment,
 } from "@/lib/queries";
 import { Database } from "@/types/database.types";
 
@@ -49,6 +50,8 @@ const CalendarView = () => {
   const [clients, setClients] = React.useState<Client[]>([]);
   const [services, setServices] = React.useState<Service[]>([]);
   const [showAppointmentForm, setShowAppointmentForm] = React.useState(false);
+  const [selectedAppointment, setSelectedAppointment] =
+    React.useState<AppointmentWithDetails | null>(null);
   const { toast } = useToast();
 
   React.useEffect(() => {
@@ -85,17 +88,40 @@ const CalendarView = () => {
     fetchData();
   }, []);
 
-  const formattedAppointments = appointments.map((apt) => ({
-    id: apt.id,
-    clientName: `${apt.clients?.first_name} ${apt.clients?.last_name}`,
-    serviceName: apt.services.name,
-    serviceColor: apt.services.color,
-    duration: apt.services.duration.toString(),
-    time: apt.time,
-    date: new Date(apt.date),
-    notes: apt.notes || "",
-    isPaid: apt.is_paid,
-  }));
+  // Group appointments by client and date
+  const groupedAppointments = appointments.reduce(
+    (acc, apt) => {
+      const key = `${apt.clients.id}-${apt.date}-${apt.time}`;
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(apt);
+      return acc;
+    },
+    {} as Record<string, AppointmentWithDetails[]>,
+  );
+
+  // Format appointments with combined services
+  const formattedAppointments = Object.values(groupedAppointments).map(
+    (group) => {
+      const firstApt = group[0];
+      return {
+        id: firstApt.id,
+        clientName: `${firstApt.clients?.first_name} ${firstApt.clients?.last_name}`,
+        serviceName: group.map((apt) => apt.services.name).join(", "),
+        serviceColor: firstApt.services.color,
+        duration: firstApt.services.duration.toString(),
+        time: firstApt.time,
+        date: new Date(firstApt.date),
+        notes: firstApt.notes || "",
+        isPaid: firstApt.is_paid,
+        services: group.map((apt) => ({
+          name: apt.services.name,
+          duration: apt.services.duration,
+        })),
+      };
+    },
+  );
 
   const handleAppointmentSubmit = async (appointmentData: {
     clientId: string;
@@ -119,6 +145,7 @@ const CalendarView = () => {
 
       await fetchAppointments();
       setShowAppointmentForm(false);
+      setSelectedAppointment(null);
       toast({
         title: "Wizyta dodana",
         description: "Pomyślnie dodano nową wizytę",
@@ -128,6 +155,29 @@ const CalendarView = () => {
       toast({
         title: "Błąd",
         description: "Nie udało się dodać wizyty",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditAppointment = (appointment: AppointmentWithDetails) => {
+    setSelectedAppointment(appointment);
+    setShowAppointmentForm(true);
+  };
+
+  const handleDeleteAppointment = async (appointmentId: string) => {
+    try {
+      await deleteAppointment(appointmentId);
+      await fetchAppointments();
+      toast({
+        title: "Wizyta usunięta",
+        description: "Pomyślnie usunięto wizytę",
+      });
+    } catch (error) {
+      console.error("Error deleting appointment:", error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się usunąć wizyty",
         variant: "destructive",
       });
     }
@@ -146,7 +196,10 @@ const CalendarView = () => {
               {format(currentDate, "HH:mm")}
             </div>
             <Button
-              onClick={() => setShowAppointmentForm(true)}
+              onClick={() => {
+                setSelectedAppointment(null);
+                setShowAppointmentForm(true);
+              }}
               className="flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
@@ -160,14 +213,33 @@ const CalendarView = () => {
         />
       </div>
 
-      <Dialog open={showAppointmentForm} onOpenChange={setShowAppointmentForm}>
+      <Dialog
+        open={showAppointmentForm}
+        onOpenChange={(open) => {
+          setShowAppointmentForm(open);
+          if (!open) setSelectedAppointment(null);
+        }}
+      >
         <DialogContent className="max-w-3xl">
           <AppointmentForm
             onSubmit={handleAppointmentSubmit}
             clients={clients}
             services={services}
             selectedDate={selectedDate}
-            onCancel={() => setShowAppointmentForm(false)}
+            onCancel={() => {
+              setShowAppointmentForm(false);
+              setSelectedAppointment(null);
+            }}
+            initialValues={
+              selectedAppointment
+                ? {
+                    clientId: selectedAppointment.clients.id,
+                    serviceIds: [selectedAppointment.services.id],
+                    date: selectedAppointment.date,
+                    time: selectedAppointment.time,
+                  }
+                : undefined
+            }
           />
         </DialogContent>
       </Dialog>
@@ -194,6 +266,8 @@ const CalendarView = () => {
             appointments={formattedAppointments}
             selectedDate={selectedDate}
             onAppointmentUpdate={fetchAppointments}
+            onEdit={handleEditAppointment}
+            onDelete={handleDeleteAppointment}
           />
         </div>
       </div>
