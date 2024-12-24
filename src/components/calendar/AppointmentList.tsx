@@ -10,6 +10,8 @@ import {
   ChevronUp,
   CheckCircle2,
   XCircle,
+  Edit2,
+  Trash2,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -17,6 +19,16 @@ import { cn } from "@/lib/utils";
 import { format, isSameDay } from "date-fns";
 import { pl } from "date-fns/locale";
 import { updateAppointment } from "@/lib/queries";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type Appointment = {
   id: string;
@@ -28,23 +40,30 @@ type Appointment = {
   date: Date;
   notes?: string;
   isPaid?: boolean;
+  services?: Array<{ name: string; duration: number }>;
 };
 
 type AppointmentListProps = {
   appointments?: Appointment[];
   selectedDate?: Date;
   onAppointmentUpdate?: () => void;
+  onEdit?: (appointment: Appointment) => void;
+  onDelete?: (appointmentId: string) => void;
 };
 
 const AppointmentList = ({
   appointments = [],
   selectedDate = new Date(),
   onAppointmentUpdate = () => {},
+  onEdit = () => {},
+  onDelete = () => {},
 }: AppointmentListProps) => {
   const [expandedNotes, setExpandedNotes] = React.useState<string[]>([]);
   const [editedNotes, setEditedNotes] = React.useState<Record<string, string>>(
     {},
   );
+  const [appointmentToDelete, setAppointmentToDelete] =
+    React.useState<Appointment | null>(null);
 
   // Initialize edited notes when appointments change or when a note section is expanded
   const initializeNotes = (appointmentId: string) => {
@@ -109,6 +128,24 @@ const AppointmentList = ({
     }
   };
 
+  // Calculate total duration for an appointment
+  const getTotalDuration = (appointment: Appointment): number => {
+    if (appointment.services && appointment.services.length > 0) {
+      return appointment.services.reduce(
+        (total, service) => total + service.duration,
+        0,
+      );
+    }
+    return parseInt(appointment.duration) || 0;
+  };
+
+  const handleDeleteConfirm = () => {
+    if (appointmentToDelete) {
+      onDelete(appointmentToDelete.id);
+      setAppointmentToDelete(null);
+    }
+  };
+
   return (
     <div className="bg-white w-full p-3 rounded-lg shadow-sm">
       <h2 className="text-lg font-semibold mb-3">Wizyty</h2>
@@ -121,6 +158,7 @@ const AppointmentList = ({
               </h3>
               {groupedAppointments[dateKey].map((appointment) => {
                 const isSelectedDay = isSameDay(appointment.date, selectedDate);
+                const totalDuration = getTotalDuration(appointment);
 
                 return (
                   <Card
@@ -168,8 +206,28 @@ const AppointmentList = ({
                               className="flex items-center space-x-1"
                             >
                               <Clock className="w-4 h-4" />
-                              <span>{appointment.duration} min</span>
+                              <span>{totalDuration} min</span>
                             </Badge>
+                            <div className="flex items-center space-x-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => onEdit(appointment)}
+                                className="h-8 w-8"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() =>
+                                  setAppointmentToDelete(appointment)
+                                }
+                                className="h-8 w-8 text-red-600 hover:text-red-700"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                             <Button
                               variant={
                                 appointment.isPaid ? "outline" : "destructive"
@@ -239,6 +297,32 @@ const AppointmentList = ({
           ))}
         </div>
       </ScrollArea>
+
+      <AlertDialog
+        open={!!appointmentToDelete}
+        onOpenChange={() => setAppointmentToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Czy na pewno chcesz usunąć tę wizytę?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Ta akcja jest nieodwracalna. Wizyta zostanie trwale usunięta z
+              systemu.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Anuluj</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Usuń
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
