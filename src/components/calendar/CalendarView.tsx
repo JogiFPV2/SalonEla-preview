@@ -112,6 +112,7 @@ const CalendarView = () => {
             service_id: serviceId,
             date: appointmentData.date,
             time: appointmentData.time,
+            is_paid: false,
           }),
         ),
       );
