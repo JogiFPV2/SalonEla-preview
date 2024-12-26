@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { AppointmentWithDetails } from "./CalendarView";
 import {
   Clock,
   User,
@@ -16,7 +17,14 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { format, isSameDay } from "date-fns";
+import {
+  format,
+  isSameDay,
+  isAfter,
+  isBefore,
+  startOfDay,
+  parseISO,
+} from "date-fns";
 import { pl } from "date-fns/locale";
 import { updateAppointment } from "@/lib/queries";
 import {
@@ -41,13 +49,15 @@ type Appointment = {
   notes?: string;
   isPaid?: boolean;
   services?: Array<{ name: string; duration: number }>;
+  clientId?: string;
+  serviceId?: string;
 };
 
 type AppointmentListProps = {
   appointments?: Appointment[];
   selectedDate?: Date;
   onAppointmentUpdate?: () => void;
-  onEdit?: (appointment: Appointment) => void;
+  onEdit?: (appointment: AppointmentWithDetails) => void;
   onDelete?: (appointmentId: string) => void;
 };
 
@@ -76,8 +86,29 @@ const AppointmentList = ({
     }
   };
 
+  // Filter appointments based on selected date
+  const filteredAppointments = useMemo(() => {
+    const today = startOfDay(new Date());
+    const selectedDay = startOfDay(selectedDate);
+
+    // If selected date is today or in the future, show from selected date onwards
+    if (isAfter(selectedDay, today) || isSameDay(selectedDay, today)) {
+      return appointments.filter((appointment) => {
+        const appointmentDate = startOfDay(appointment.date);
+        return (
+          isAfter(appointmentDate, today) || isSameDay(appointmentDate, today)
+        );
+      });
+    }
+
+    // If selected date is in the past, show only that day's appointments
+    return appointments.filter((appointment) => {
+      return isSameDay(appointment.date, selectedDay);
+    });
+  }, [appointments, selectedDate]);
+
   // Group appointments by date
-  const groupedAppointments = appointments.reduce(
+  const groupedAppointments = filteredAppointments.reduce(
     (acc, appointment) => {
       const dateKey = format(appointment.date, "yyyy-MM-dd");
       if (!acc[dateKey]) {
@@ -90,7 +121,9 @@ const AppointmentList = ({
   );
 
   // Sort dates
-  const sortedDates = Object.keys(groupedAppointments).sort();
+  const sortedDates = Object.keys(groupedAppointments).sort(
+    (a, b) => parseISO(a).getTime() - parseISO(b).getTime(),
+  );
 
   const toggleNotes = (id: string) => {
     if (!expandedNotes.includes(id)) {
@@ -144,6 +177,28 @@ const AppointmentList = ({
       onDelete(appointmentToDelete.id);
       setAppointmentToDelete(null);
     }
+  };
+
+  const handleEdit = (appointment: Appointment) => {
+    const appointmentDetails: AppointmentWithDetails = {
+      id: appointment.id,
+      date: format(appointment.date, "yyyy-MM-dd"),
+      time: appointment.time,
+      notes: appointment.notes || null,
+      is_paid: appointment.isPaid || false,
+      clients: {
+        id: appointment.clientId || "",
+        first_name: appointment.clientName.split(" ")[0],
+        last_name: appointment.clientName.split(" ")[1] || "",
+      },
+      services: {
+        id: appointment.serviceId || "",
+        name: appointment.serviceName,
+        duration: parseInt(appointment.duration),
+        color: appointment.serviceColor,
+      },
+    };
+    onEdit(appointmentDetails);
   };
 
   return (
@@ -212,7 +267,7 @@ const AppointmentList = ({
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => onEdit(appointment)}
+                                onClick={() => handleEdit(appointment)}
                                 className="h-8 w-8"
                               >
                                 <Edit2 className="h-4 w-4" />
@@ -245,7 +300,7 @@ const AppointmentList = ({
                                 </>
                               ) : (
                                 <>
-                                  <XCircle className="w-4 h-4" />
+                                  <XCircle className="w-4 w-4" />
                                   Nieopłacone
                                 </>
                               )}

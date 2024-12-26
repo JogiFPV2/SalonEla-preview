@@ -13,6 +13,7 @@ import { useToast } from "@/components/ui/use-toast";
 import {
   getAppointments,
   createAppointment,
+  updateAppointment,
   getClients,
   getServices,
   deleteAppointment,
@@ -53,6 +54,11 @@ const CalendarView = () => {
   const [selectedAppointment, setSelectedAppointment] =
     React.useState<AppointmentWithDetails | null>(null);
   const { toast } = useToast();
+
+  // Extract all appointment dates for calendar indicators
+  const appointmentDates = React.useMemo(() => {
+    return appointments.map((apt) => new Date(apt.date));
+  }, [appointments]);
 
   React.useEffect(() => {
     const timer = setInterval(() => {
@@ -119,6 +125,8 @@ const CalendarView = () => {
           name: apt.services.name,
           duration: apt.services.duration,
         })),
+        clientId: firstApt.clients.id,
+        serviceId: firstApt.services.id,
       };
     },
   );
@@ -130,31 +138,49 @@ const CalendarView = () => {
     time: string;
   }) => {
     try {
-      // Create an appointment for each service
-      await Promise.all(
-        appointmentData.serviceIds.map((serviceId) =>
-          createAppointment({
-            client_id: appointmentData.clientId,
-            service_id: serviceId,
-            date: appointmentData.date,
-            time: appointmentData.time,
-            is_paid: false,
-          }),
-        ),
-      );
+      if (selectedAppointment) {
+        // Update existing appointment
+        await updateAppointment(selectedAppointment.id, {
+          client_id: appointmentData.clientId,
+          service_id: appointmentData.serviceIds[0], // For now, just update with the first service
+          date: appointmentData.date,
+          time: appointmentData.time,
+        });
+
+        toast({
+          title: "Wizyta zaktualizowana",
+          description: "Pomyślnie zaktualizowano wizytę",
+        });
+      } else {
+        // Create new appointments for each service
+        await Promise.all(
+          appointmentData.serviceIds.map((serviceId) =>
+            createAppointment({
+              client_id: appointmentData.clientId,
+              service_id: serviceId,
+              date: appointmentData.date,
+              time: appointmentData.time,
+              is_paid: false,
+            }),
+          ),
+        );
+
+        toast({
+          title: "Wizyta dodana",
+          description: "Pomyślnie dodano nową wizytę",
+        });
+      }
 
       await fetchAppointments();
       setShowAppointmentForm(false);
       setSelectedAppointment(null);
-      toast({
-        title: "Wizyta dodana",
-        description: "Pomyślnie dodano nową wizytę",
-      });
     } catch (error) {
-      console.error("Error creating appointment:", error);
+      console.error("Error managing appointment:", error);
       toast({
         title: "Błąd",
-        description: "Nie udało się dodać wizyty",
+        description: selectedAppointment
+          ? "Nie udało się zaktualizować wizyty"
+          : "Nie udało się dodać wizyty",
         variant: "destructive",
       });
     }
@@ -185,13 +211,13 @@ const CalendarView = () => {
 
   return (
     <div className="w-full bg-gray-50 p-4 space-y-4">
-      {/* Timeline Section */}
+      {/* Header Section */}
       <div className="w-full">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
           <h2 className="text-2xl font-semibold">
             Harmonogram na {format(selectedDate, "d MMMM yyyy", { locale: pl })}
           </h2>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 w-full sm:w-auto">
             <div className="text-xl font-medium text-gray-600">
               {format(currentDate, "HH:mm")}
             </div>
@@ -200,17 +226,21 @@ const CalendarView = () => {
                 setSelectedAppointment(null);
                 setShowAppointmentForm(true);
               }}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 w-full sm:w-auto"
             >
               <Plus className="w-4 h-4" />
               Nowa wizyta
             </Button>
           </div>
         </div>
-        <AppointmentTimeline
-          appointments={formattedAppointments}
-          selectedDate={selectedDate}
-        />
+
+        {/* Timeline - Hidden on Mobile */}
+        <div className="hidden md:block">
+          <AppointmentTimeline
+            appointments={formattedAppointments}
+            selectedDate={selectedDate}
+          />
+        </div>
       </div>
 
       <Dialog
@@ -220,12 +250,13 @@ const CalendarView = () => {
           if (!open) setSelectedAppointment(null);
         }}
       >
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <AppointmentForm
             onSubmit={handleAppointmentSubmit}
             clients={clients}
             services={services}
             selectedDate={selectedDate}
+            appointmentDates={appointmentDates}
             onCancel={() => {
               setShowAppointmentForm(false);
               setSelectedAppointment(null);
@@ -247,7 +278,7 @@ const CalendarView = () => {
       {/* Split View Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Calendar Picker */}
-        <Card className="p-4 bg-white">
+        <Card className="p-4 bg-white order-1 lg:order-none">
           <div className="text-center mb-4 text-lg font-medium text-gray-600">
             {format(currentDate, "EEEE, d MMMM yyyy", { locale: pl })}
           </div>
@@ -255,13 +286,22 @@ const CalendarView = () => {
             mode="single"
             selected={selectedDate}
             onSelect={(date) => date && setSelectedDate(date)}
-            className="rounded-md"
+            className="rounded-md mx-auto"
+            modifiers={{
+              booked: appointmentDates,
+            }}
+            modifiersStyles={{
+              booked: {
+                backgroundColor: "#f3f4f6",
+                fontWeight: "bold",
+              },
+            }}
             locale={pl}
           />
         </Card>
 
         {/* Appointment List */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 order-2 lg:order-none">
           <AppointmentList
             appointments={formattedAppointments}
             selectedDate={selectedDate}
