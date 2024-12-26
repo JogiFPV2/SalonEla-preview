@@ -13,8 +13,10 @@ import { useToast } from "@/components/ui/use-toast";
 import {
   getAppointments,
   createAppointment,
+  updateAppointment,
   getClients,
   getServices,
+  deleteAppointment,
 } from "@/lib/queries";
 import { Database } from "@/types/database.types";
 
@@ -49,7 +51,14 @@ const CalendarView = () => {
   const [clients, setClients] = React.useState<Client[]>([]);
   const [services, setServices] = React.useState<Service[]>([]);
   const [showAppointmentForm, setShowAppointmentForm] = React.useState(false);
+  const [selectedAppointment, setSelectedAppointment] =
+    React.useState<AppointmentWithDetails | null>(null);
   const { toast } = useToast();
+
+  // Extract all appointment dates for calendar indicators
+  const appointmentDates = React.useMemo(() => {
+    return appointments.map((apt) => new Date(apt.date));
+  }, [appointments]);
 
   React.useEffect(() => {
     const timer = setInterval(() => {
@@ -85,17 +94,42 @@ const CalendarView = () => {
     fetchData();
   }, []);
 
-  const formattedAppointments = appointments.map((apt) => ({
-    id: apt.id,
-    clientName: `${apt.clients?.first_name} ${apt.clients?.last_name}`,
-    serviceName: apt.services.name,
-    serviceColor: apt.services.color,
-    duration: apt.services.duration.toString(),
-    time: apt.time,
-    date: new Date(apt.date),
-    notes: apt.notes || "",
-    isPaid: apt.is_paid,
-  }));
+  // Group appointments by client and date
+  const groupedAppointments = appointments.reduce(
+    (acc, apt) => {
+      const key = `${apt.clients.id}-${apt.date}-${apt.time}`;
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(apt);
+      return acc;
+    },
+    {} as Record<string, AppointmentWithDetails[]>,
+  );
+
+  // Format appointments with combined services
+  const formattedAppointments = Object.values(groupedAppointments).map(
+    (group) => {
+      const firstApt = group[0];
+      return {
+        id: firstApt.id,
+        clientName: `${firstApt.clients?.first_name} ${firstApt.clients?.last_name}`,
+        serviceName: group.map((apt) => apt.services.name).join(", "),
+        serviceColor: firstApt.services.color,
+        duration: firstApt.services.duration.toString(),
+        time: firstApt.time,
+        date: new Date(firstApt.date),
+        notes: firstApt.notes || "",
+        isPaid: firstApt.is_paid,
+        services: group.map((apt) => ({
+          name: apt.services.name,
+          duration: apt.services.duration,
+        })),
+        clientId: firstApt.clients.id,
+        serviceId: firstApt.services.id,
+      };
+    },
+  );
 
   const handleAppointmentSubmit = async (appointmentData: {
     clientId: string;
@@ -104,30 +138,72 @@ const CalendarView = () => {
     time: string;
   }) => {
     try {
-      // Create an appointment for each service
-      await Promise.all(
-        appointmentData.serviceIds.map((serviceId) =>
-          createAppointment({
-            client_id: appointmentData.clientId,
-            service_id: serviceId,
-            date: appointmentData.date,
-            time: appointmentData.time,
-            is_paid: false,
-          }),
-        ),
-      );
+      if (selectedAppointment) {
+        // Update existing appointment
+        await updateAppointment(selectedAppointment.id, {
+          client_id: appointmentData.clientId,
+          service_id: appointmentData.serviceIds[0], // For now, just update with the first service
+          date: appointmentData.date,
+          time: appointmentData.time,
+        });
+
+        toast({
+          title: "Wizyta zaktualizowana",
+          description: "Pomyślnie zaktualizowano wizytę",
+        });
+      } else {
+        // Create new appointments for each service
+        await Promise.all(
+          appointmentData.serviceIds.map((serviceId) =>
+            createAppointment({
+              client_id: appointmentData.clientId,
+              service_id: serviceId,
+              date: appointmentData.date,
+              time: appointmentData.time,
+              is_paid: false,
+            }),
+          ),
+        );
+
+        toast({
+          title: "Wizyta dodana",
+          description: "Pomyślnie dodano nową wizytę",
+        });
+      }
 
       await fetchAppointments();
       setShowAppointmentForm(false);
-      toast({
-        title: "Wizyta dodana",
-        description: "Pomyślnie dodano nową wizytę",
-      });
+      setSelectedAppointment(null);
     } catch (error) {
-      console.error("Error creating appointment:", error);
+      console.error("Error managing appointment:", error);
       toast({
         title: "Błąd",
-        description: "Nie udało się dodać wizyty",
+        description: selectedAppointment
+          ? "Nie udało się zaktualizować wizyty"
+          : "Nie udało się dodać wizyty",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditAppointment = (appointment: AppointmentWithDetails) => {
+    setSelectedAppointment(appointment);
+    setShowAppointmentForm(true);
+  };
+
+  const handleDeleteAppointment = async (appointmentId: string) => {
+    try {
+      await deleteAppointment(appointmentId);
+      await fetchAppointments();
+      toast({
+        title: "Wizyta usunięta",
+        description: "Pomyślnie usunięto wizytę",
+      });
+    } catch (error) {
+      console.error("Error deleting appointment:", error);
+      toast({
+        title: "Błąd",
+        description: "Nie udało się usunąć wizyty",
         variant: "destructive",
       });
     }
@@ -135,39 +211,66 @@ const CalendarView = () => {
 
   return (
     <div className="w-full bg-gray-50 p-4 space-y-4">
-      {/* Timeline Section */}
+      {/* Header Section */}
       <div className="w-full">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
           <h2 className="text-2xl font-semibold">
             Harmonogram na {format(selectedDate, "d MMMM yyyy", { locale: pl })}
           </h2>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 w-full sm:w-auto">
             <div className="text-xl font-medium text-gray-600">
               {format(currentDate, "HH:mm")}
             </div>
             <Button
-              onClick={() => setShowAppointmentForm(true)}
-              className="flex items-center gap-2"
+              onClick={() => {
+                setSelectedAppointment(null);
+                setShowAppointmentForm(true);
+              }}
+              className="flex items-center gap-2 w-full sm:w-auto"
             >
               <Plus className="w-4 h-4" />
               Nowa wizyta
             </Button>
           </div>
         </div>
-        <AppointmentTimeline
-          appointments={formattedAppointments}
-          selectedDate={selectedDate}
-        />
+
+        {/* Timeline - Hidden on Mobile */}
+        <div className="hidden md:block">
+          <AppointmentTimeline
+            appointments={formattedAppointments}
+            selectedDate={selectedDate}
+          />
+        </div>
       </div>
 
-      <Dialog open={showAppointmentForm} onOpenChange={setShowAppointmentForm}>
-        <DialogContent className="max-w-3xl">
+      <Dialog
+        open={showAppointmentForm}
+        onOpenChange={(open) => {
+          setShowAppointmentForm(open);
+          if (!open) setSelectedAppointment(null);
+        }}
+      >
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <AppointmentForm
             onSubmit={handleAppointmentSubmit}
             clients={clients}
             services={services}
             selectedDate={selectedDate}
-            onCancel={() => setShowAppointmentForm(false)}
+            appointmentDates={appointmentDates}
+            onCancel={() => {
+              setShowAppointmentForm(false);
+              setSelectedAppointment(null);
+            }}
+            initialValues={
+              selectedAppointment
+                ? {
+                    clientId: selectedAppointment.clients.id,
+                    serviceIds: [selectedAppointment.services.id],
+                    date: selectedAppointment.date,
+                    time: selectedAppointment.time,
+                  }
+                : undefined
+            }
           />
         </DialogContent>
       </Dialog>
@@ -175,7 +278,7 @@ const CalendarView = () => {
       {/* Split View Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Calendar Picker */}
-        <Card className="p-4 bg-white">
+        <Card className="p-4 bg-white order-1 lg:order-none">
           <div className="text-center mb-4 text-lg font-medium text-gray-600">
             {format(currentDate, "EEEE, d MMMM yyyy", { locale: pl })}
           </div>
@@ -183,17 +286,28 @@ const CalendarView = () => {
             mode="single"
             selected={selectedDate}
             onSelect={(date) => date && setSelectedDate(date)}
-            className="rounded-md"
+            className="rounded-md mx-auto"
+            modifiers={{
+              booked: appointmentDates,
+            }}
+            modifiersStyles={{
+              booked: {
+                backgroundColor: "#f3f4f6",
+                fontWeight: "bold",
+              },
+            }}
             locale={pl}
           />
         </Card>
 
         {/* Appointment List */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 order-2 lg:order-none">
           <AppointmentList
             appointments={formattedAppointments}
             selectedDate={selectedDate}
             onAppointmentUpdate={fetchAppointments}
+            onEdit={handleEditAppointment}
+            onDelete={handleDeleteAppointment}
           />
         </div>
       </div>

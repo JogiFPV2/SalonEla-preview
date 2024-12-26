@@ -19,19 +19,36 @@ type ServiceFormProps = {
   isEditing?: boolean;
 };
 
-const PASTEL_COLORS = [
-  "#FFB3BA",
-  "#BAFFC9",
-  "#BAE1FF",
-  "#FFFFBA",
-  "#FFB3F7",
-  "#E0BBE4",
-  "#957DAD",
-  "#D4A5A5",
-  "#9E8FB2",
-  "#A8E6CF",
-  "#FFD3B6",
-  "#FFC8A2",
+const COLORS = [
+  // Vibrant Colors
+  "#FF0000", // Red
+  "#00FF00", // Lime
+  "#0000FF", // Blue
+  "#FF00FF", // Magenta
+  "#00FFFF", // Cyan
+  "#FF8000", // Orange
+  "#8000FF", // Purple
+  "#FF0080", // Pink
+
+  // Pastel Colors
+  "#FFB3BA", // Pastel Red
+  "#BAFFC9", // Pastel Green
+  "#BAE1FF", // Pastel Blue
+  "#FFB3F7", // Pastel Pink
+  "#E0BBE4", // Pastel Purple
+  "#957DAD", // Dusty Purple
+  "#FEC8D8", // Light Pink
+  "#FFDFD3", // Peach
+
+  // Deep Colors
+  "#800000", // Maroon
+  "#008000", // Dark Green
+  "#000080", // Navy
+  "#800080", // Deep Purple
+  "#008080", // Teal
+  "#804000", // Brown
+  "#400080", // Indigo
+  "#804040", // Burgundy
 ];
 
 const ServiceForm = ({
@@ -39,7 +56,7 @@ const ServiceForm = ({
   initialValues = {
     name: "",
     duration: 30,
-    color: PASTEL_COLORS[0],
+    color: COLORS[0],
   },
   isEditing = false,
 }: ServiceFormProps) => {
@@ -83,12 +100,12 @@ const ServiceForm = ({
 
         <div className="space-y-2">
           <Label>Kolor</Label>
-          <div className="grid grid-cols-6 gap-2">
-            {PASTEL_COLORS.map((c) => (
+          <div className="grid grid-cols-8 gap-2">
+            {COLORS.map((c) => (
               <button
                 key={c}
                 type="button"
-                className={`w-8 h-8 rounded-full border-2 ${color === c ? "border-black" : "border-transparent"}`}
+                className={`w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 ${color === c ? "border-black shadow-lg scale-110" : "border-transparent"}`}
                 style={{ backgroundColor: c }}
                 onClick={() => setColor(c)}
               />

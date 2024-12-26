@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,13 @@ type AppointmentFormProps = {
   clients: Client[];
   services: Service[];
   selectedDate?: Date;
+  appointmentDates?: Date[];
+  initialValues?: {
+    clientId: string;
+    serviceIds: string[];
+    date: string;
+    time: string;
+  };
   onCancel: () => void;
 };
 
@@ -30,6 +37,8 @@ const AppointmentForm = ({
   clients,
   services,
   selectedDate = new Date(),
+  appointmentDates = [],
+  initialValues,
   onCancel,
 }: AppointmentFormProps) => {
   const [date, setDate] = React.useState<Date>(selectedDate);
@@ -40,6 +49,27 @@ const AppointmentForm = ({
   );
   const [searchTerm, setSearchTerm] = React.useState("");
   const [showAllClients, setShowAllClients] = React.useState(false);
+
+  // Initialize form with initial values if provided
+  useEffect(() => {
+    if (initialValues) {
+      // Set date and time
+      setDate(new Date(initialValues.date));
+      setTime(initialValues.time);
+
+      // Set selected client
+      const client = clients.find((c) => c.id === initialValues.clientId);
+      if (client) {
+        setSelectedClient(client);
+      }
+
+      // Set selected services
+      const selectedServs = services.filter((s) =>
+        initialValues.serviceIds.includes(s.id),
+      );
+      setSelectedServices(selectedServs);
+    }
+  }, [initialValues, clients, services]);
 
   const filteredClients = clients.filter((client) =>
     `${client.first_name} ${client.last_name} ${client.phone}`
@@ -75,7 +105,7 @@ const AppointmentForm = ({
   return (
     <div className="w-full">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Left Column - Date & Time */}
           <div className="space-y-4">
             <div>
@@ -84,7 +114,16 @@ const AppointmentForm = ({
                 mode="single"
                 selected={date}
                 onSelect={(date) => date && setDate(date)}
-                className="rounded-md border mt-2"
+                className="rounded-md border mt-2 mx-auto"
+                modifiers={{
+                  booked: appointmentDates,
+                }}
+                modifiersStyles={{
+                  booked: {
+                    backgroundColor: "#f3f4f6",
+                    fontWeight: "bold",
+                  },
+                }}
                 locale={pl}
               />
             </div>
@@ -250,7 +289,7 @@ const AppointmentForm = ({
             type="submit"
             disabled={!selectedClient || selectedServices.length === 0}
           >
-            Dodaj wizytę
+            {initialValues ? "Zapisz zmiany" : "Dodaj wizytę"}
           </Button>
         </div>
       </form>
